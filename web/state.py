@@ -258,9 +258,11 @@ class JobRegistry:
     """
 
     # Per-stage weights, used to turn (stage, fraction) into a monotonic global %.
+    # Must sum to 1.0 (asserted in tests). "vision" (nonverbal MediaPipe) sits between
+    # metrics and feedback; transcribe was trimmed to make room.
     STAGE_WEIGHTS = [
-        ("extract", 0.05), ("split", 0.05), ("transcribe", 0.70),
-        ("metrics", 0.02), ("feedback", 0.16), ("save", 0.02),
+        ("extract", 0.05), ("split", 0.05), ("transcribe", 0.60),
+        ("metrics", 0.02), ("vision", 0.10), ("feedback", 0.16), ("save", 0.02),
     ]
 
     def __init__(self) -> None:

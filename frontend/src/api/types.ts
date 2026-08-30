@@ -91,6 +91,26 @@ export interface RecordStopResponse {
   path: string;
 }
 
+// Nonverbal metrics (Phase 3, local MediaPipe). Rides inside the metrics blob under
+// `nonverbal` when the vision stage ran. All ratios are 0..1; rates are per-minute.
+export interface NonverbalMetrics {
+  frames_analyzed: number;
+  face_detected_ratio: number;
+  pose_detected_ratio: number;
+  smile_ratio: number;
+  expression_variability: number;
+  flat_affect_ratio: number;
+  blink_rate_per_min: number;
+  brow_raise_events: number;
+  eye_contact_ratio: number;
+  head_stability: number;
+  posture_upright_ratio: number;
+  slouch_ratio: number;
+  gesture_rate_per_min: number;
+  hands_visible_ratio: number;
+  notes: string[];
+}
+
 export interface Metrics {
   language: string;
   duration_s: number;
@@ -99,6 +119,7 @@ export interface Metrics {
   fillers_per_min: number;
   long_pause_count: number;
   pause_ratio: number;
+  nonverbal?: NonverbalMetrics;
 }
 
 export interface Improvement {
@@ -131,6 +152,7 @@ export interface AnalyzeResult {
   metrics: Metrics;
   feedback: Feedback | null;
   feedback_error: string | null;
+  vision_error?: string | null;
 }
 
 export interface AnalyzeJobResponse {

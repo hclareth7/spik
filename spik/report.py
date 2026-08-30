@@ -53,6 +53,11 @@ class SessionResult:
     # If feedback was skipped due to a provider failure (e.g. missing ANTHROPIC_API_KEY),
     # the reason lands here; the analysis does NOT fail: local metrics are saved anyway.
     feedback_error: str | None = None
+    # Nonverbal metrics (Phase 3, local MediaPipe). None if vision is disabled/unavailable.
+    vision_metrics: dict | None = None
+    # If the vision stage failed (missing [vision] extra, MediaPipe error), the reason lands
+    # here; the analysis still completes with verbal metrics + feedback (graceful degradation).
+    vision_error: str | None = None
 
 
 def run_analysis(
@@ -94,6 +99,23 @@ def run_analysis(
         metrics = verbal.analyze(transcript)
         _p("metrics", 1.0)
 
+        # 3b) Nonverbal metrics (optional, local MediaPipe: gestures/expression/posture/gaze).
+        # Degrades gracefully like feedback: a missing [vision] extra or a MediaPipe error
+        # never breaks the analysis — verbal metrics + feedback are still produced. Frames are
+        # read locally and discarded; only numbers persist ("todo local").
+        vision_metrics: dict | None = None
+        vision_error: str | None = None
+        if config.VISION_ENABLED:
+            from . import vision  # lazy import (optional cv2/mediapipe)
+
+            _p("vision", 0.0)
+            try:
+                vision_metrics = vision.analyze(video)
+            except Exception as e:  # noqa: BLE001 - degrade to verbal-only, don't break analysis
+                vision_error = str(e)
+                print(f"[spik] vision skipped (verbal metrics only): {e}", file=sys.stderr)
+            _p("vision", 1.0)
+
         # 4) Feedback (optional; only text/metrics are sent).
         # Degrades gracefully: if the provider is not configured (e.g. a friend without
         # ANTHROPIC_API_KEY) or rejects the request, the analysis is NOT lost — local metrics
@@ -105,14 +127,19 @@ def run_analysis(
 
             _p("feedback", 0.0)
             try:
-                fb = feedback_mod.generate(transcript.text, metrics.to_dict())
+                fb = feedback_mod.generate(
+                    transcript.text, metrics.to_dict(), vision_metrics=vision_metrics,
+                )
             except Exception as e:  # noqa: BLE001 - degrade to metrics-only, don't break the analysis
                 feedback_error = str(e)
                 print(f"[spik] feedback skipped (local metrics only): {e}", file=sys.stderr)
             _p("feedback", 1.0)
 
-        # 5) Persist.
+        # 5) Persist. Nonverbal metrics ride inside the free-form metrics blob (no DB migration).
         _p("save", 0.0)
+        metrics_blob = metrics.to_dict()
+        if vision_metrics:
+            metrics_blob["nonverbal"] = vision_metrics
         row = store.SessionRow(
             created_at=datetime.now(timezone.utc).isoformat(),
             video_path=str(video),
@@ -122,7 +149,7 @@ def run_analysis(
             filler_count=metrics.filler_count,
             fillers_per_min=metrics.fillers_per_min,
             overall_score=fb.overall_score if fb else None,
-            metrics=metrics.to_dict(),
+            metrics=metrics_blob,
             feedback=fb.to_dict() if fb else None,
             project=_project_for(video),
         )
@@ -136,6 +163,8 @@ def run_analysis(
             feedback=fb,
             session_id=session_id,
             feedback_error=feedback_error,
+            vision_metrics=vision_metrics,
+            vision_error=vision_error,
         )
     finally:
         if created_wav and not keep_audio and wav.exists():
@@ -169,6 +198,27 @@ def render(result: SessionResult) -> None:
     if m.filler_breakdown:
         top = ", ".join(f"{k} ({v})" for k, v in m.filler_breakdown.items())
         console.print(f"[dim]Fillers detected:[/dim] {top}")
+
+    # --- Nonverbal metrics (local, if the vision stage ran) ---
+    nv = result.vision_metrics
+    if nv:
+        nvt = Table(title="Nonverbal metrics (local)", show_header=True, header_style="bold")
+        nvt.add_column("Metric")
+        nvt.add_column("Value", justify="right")
+        nvt.add_row("Face detected", f"{nv['face_detected_ratio'] * 100:.0f}%")
+        nvt.add_row("Eye contact (head-frontal proxy)", f"{nv['eye_contact_ratio'] * 100:.0f}%")
+        nvt.add_row("Smiling", f"{nv['smile_ratio'] * 100:.0f}%")
+        nvt.add_row("Flat affect", f"{nv['flat_affect_ratio'] * 100:.0f}%")
+        nvt.add_row("Blink rate", f"{nv['blink_rate_per_min']:.1f}/min")
+        nvt.add_row("Head stability", f"{nv['head_stability'] * 100:.0f}%")
+        nvt.add_row("Posture upright (proxy)", f"{nv['posture_upright_ratio'] * 100:.0f}%")
+        nvt.add_row("Gestures", f"{nv['gesture_rate_per_min']:.1f}/min")
+        nvt.add_row("Hands visible", f"{nv['hands_visible_ratio'] * 100:.0f}%")
+        console.print(nvt)
+        if nv.get("notes"):
+            console.print(f"[dim]Notes:[/dim] {', '.join(nv['notes'])}")
+    elif result.vision_error:
+        console.print(f"\n[yellow]Nonverbal analysis skipped: {result.vision_error}[/yellow]")
 
     # --- Claude feedback ---
     fb = result.feedback
