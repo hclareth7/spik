@@ -7,6 +7,15 @@ a la nube (Claude) solo se envía texto + métricas para generar el feedback.
 
 Bilingüe (español / inglés), detección automática de idioma.
 
+## Demo
+
+Flujo completo en **modo inglés**: grabar una práctica → analizarla en local
+(transcripción con WhisperX + métricas verbales) → ver el feedback de Claude
+(puntuación, resumen, fortalezas, mejoras, reescrituras y objetivos). El video/audio
+nunca sale de la máquina; a la nube solo van texto y métricas.
+
+![Demo de spik: grabar, analizar en local y ver el feedback (modo inglés)](docs/demo.gif)
+
 ## Arquitectura (resumen)
 
 ```
