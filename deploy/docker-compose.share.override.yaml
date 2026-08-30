@@ -1,0 +1,20 @@
+# Override para el appliance: reactiva el feedback de Claude vía Google Vertex AI
+# (Application Default Credentials, ADC) en lugar de una ANTHROPIC_API_KEY.
+#
+# Uso:
+#   podman compose -f deploy/docker-compose.share.yaml \
+#                  -f deploy/docker-compose.share.override.yaml up -d
+#
+# Seguridad: el ADC se monta READ-ONLY y NUNCA se copia a la imagen. No hay clave
+# que guardar en el repo (con Vertex el secreto vive fuera, en ~/.config/gcloud).
+# "Todo local" se mantiene: solo texto + métricas salen a Claude; video/audio no.
+services:
+  spik:
+    environment:
+      SPIK_PROVIDER: vertex
+      SPIK_VERTEX_PROJECT: "${SPEAK_VERTEX_PROJECT}"
+      SPIK_VERTEX_REGION: "${SPEAK_VERTEX_REGION}"
+      SPIK_CLAUDE_MODEL: "${SPEAK_CLAUDE_MODEL}"
+      GOOGLE_APPLICATION_CREDENTIALS: /gcloud/adc.json
+    volumes:
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/gcloud/adc.json:ro
