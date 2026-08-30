@@ -104,6 +104,14 @@ def _bool_env(name: str, default: bool) -> bool:
 VCAM_MAX_WIDTH = _int_env("VCAM_MAX_WIDTH", 1280)
 VCAM_FPS = _int_env("VCAM_FPS", 30)
 
+# --- Web server bind (GUI) ---
+# LOOPBACK ONLY for privacy ("todo local"): video/audio must never be reachable from the
+# network. The host defaults to 127.0.0.1 and is guarded in web/main.py (a non-loopback host
+# is refused). The Wails desktop shell (desktop/) overrides SPIK_PORT with a free localhost
+# port it picks at launch, then reverse-proxies the webview to it; SPIK_HOST stays loopback.
+WEB_HOST = _env("HOST", "127.0.0.1")
+WEB_PORT = _int_env("PORT", 8000)
+
 
 # WhisperX batch size (batched inference). Previously none was passed.
 WHISPER_BATCH_SIZE = _int_env("WHISPER_BATCH_SIZE", 8)

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://wails.io/schemas/config.v2.json",
+  "name": "spik",
+  "outputfilename": "spik",
+  "frontend:install": "",
+  "frontend:build": "",
+  "frontend:dev:watcher": "",
+  "author": {
+    "name": "spik"
+  },
+  "info": {
+    "productName": "spik",
+    "comments": "Local-first communication coach — desktop shell over the FastAPI backend (reverse-proxied)."
+  }
+}
