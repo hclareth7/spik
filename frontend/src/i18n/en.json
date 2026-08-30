@@ -138,11 +138,25 @@
     "noSavedMetrics": "This session has no saved metrics.",
     "opening": "Opening in your video player…"
   },
+  "nonverbal": {
+    "card": "Nonverbal metrics (local)",
+    "perMin": "{{v}}/min",
+    "disclaimer": "Local proxy: \"eye contact\" = head orientation toward the camera; \"expression\" = observable facial movement, not emotion; \"posture\" is a heuristic.",
+    "metric": {
+      "eyeContact": "Eye contact",
+      "smile": "Smile",
+      "posture": "Upright posture",
+      "gestures": "Gestures",
+      "stability": "Head stability",
+      "blink": "Blink"
+    }
+  },
   "stage": {
     "extract": "Extracting audio…",
     "split": "Splitting the audio into parts…",
     "transcribe": "Transcribing (WhisperX)…",
     "metrics": "Computing metrics…",
+    "vision": "Analyzing gestures and expressions (local)…",
     "feedback": "Generating feedback with Claude…",
     "save": "Saving the session…",
     "processing": "Processing…"

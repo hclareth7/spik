@@ -38,6 +38,20 @@ export const FeedbackView = forwardRef<HTMLDivElement, { data: FeedbackData }>(f
     [t('feedback.metric.silence'), Math.round(m.pause_ratio * 100) + '%'],
   ];
 
+  // Nonverbal metrics (local MediaPipe) — only present when the vision stage ran.
+  const nv = m.nonverbal;
+  const pct = (v: number) => Math.round(v * 100) + '%';
+  const nonverbalRows: Array<[string, string | number]> = nv
+    ? [
+        [t('nonverbal.metric.eyeContact'), pct(nv.eye_contact_ratio)],
+        [t('nonverbal.metric.smile'), pct(nv.smile_ratio)],
+        [t('nonverbal.metric.posture'), pct(nv.posture_upright_ratio)],
+        [t('nonverbal.metric.gestures'), t('nonverbal.perMin', { v: nv.gesture_rate_per_min.toFixed(1) })],
+        [t('nonverbal.metric.stability'), pct(nv.head_stability)],
+        [t('nonverbal.metric.blink'), t('nonverbal.perMin', { v: nv.blink_rate_per_min.toFixed(1) })],
+      ]
+    : [];
+
   // Summary + score depend on whether Claude feedback is present.
   const score = fb ? fb.overall_score : t('feedback.noScore');
   const summary = fb
@@ -88,6 +102,23 @@ export const FeedbackView = forwardRef<HTMLDivElement, { data: FeedbackData }>(f
           ))}
         </div>
       </div>
+
+      {nv && (
+        <div style={{ marginTop: 24 }}>
+          <div className="card-label">{t('nonverbal.card')}</div>
+          <div className="metric-grid">
+            {nonverbalRows.map(([label, value], i) => (
+              <div key={i}>
+                <div className="metric-value">{value}</div>
+                <div className="metric-label">{label}</div>
+              </div>
+            ))}
+          </div>
+          <div className="metric-label" style={{ marginTop: 8, opacity: 0.7 }}>
+            {t('nonverbal.disclaimer')}
+          </div>
+        </div>
+      )}
 
       <div className="grid" style={{ marginTop: 24 }}>
         <div>

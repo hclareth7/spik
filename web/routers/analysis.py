@@ -29,12 +29,18 @@ async def _run_analysis_job(job_id: str, path: Path, feedback: bool) -> None:
             report.run_analysis, path, feedback, None, None, False, cb,
         )
         fb = result.feedback
+        # Fold the nonverbal metrics into the metrics blob (matches how they are persisted),
+        # so the frontend reads them the same way from a live result and from history.
+        metrics = result.metrics.to_dict()
+        if result.vision_metrics:
+            metrics["nonverbal"] = result.vision_metrics
         job["result"] = {
             "session_id": result.session_id,
             "transcript": result.transcript_text,
-            "metrics": result.metrics.to_dict(),
+            "metrics": metrics,
             "feedback": fb.to_dict() if fb else None,
             "feedback_error": result.feedback_error,
+            "vision_error": result.vision_error,
         }
         job["status"] = "done"
         job["pct"] = 100.0

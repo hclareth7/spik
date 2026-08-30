@@ -119,6 +119,21 @@ _MEM_PER_WORKER_GB = 3.0
 # not pay the one-time model-load cost. Disable with SPIK_WARMUP=0.
 WARMUP = _bool_env("WARMUP", True)
 
+# ============================================================================
+# Nonverbal analysis (Phase 3: gestures, expression, posture, eye-contact proxy)
+# ============================================================================
+# Runs locally on CPU via MediaPipe. Auto-degrades to verbal-only if the [vision] extra is
+# missing or a MediaPipe error occurs (see report.py). Disable entirely with SPIK_VISION=0.
+VISION_ENABLED = _bool_env("VISION", True)
+# Frames per second to SAMPLE for vision (the video is subsampled — 5 FPS is plenty for
+# gestures/expression and keeps CPU cost low; MediaPipe competes with WhisperX for cores).
+VISION_FPS = _int_env("VISION_FPS", 5)
+# Downscale the longest side of each sampled frame to this many pixels before detection.
+VISION_MAX_DIM = _int_env("VISION_MAX_DIM", 640)
+# Optional directory holding pinned MediaPipe `.task` models (offline installs). If unset, the
+# models are auto-downloaded once to DATA_DIR/.cache/mediapipe/ (public Google Storage URLs).
+VISION_MODEL_DIR = _env("VISION_MODEL_DIR")
+
 
 def auto_workers() -> int:
     """Safe number of worker processes: bounded by CPU and available RAM.

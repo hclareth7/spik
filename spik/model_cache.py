@@ -22,6 +22,10 @@ import threading
 _asr_models: dict[tuple[str, int], object] = {}
 # language code ("es"/"en") -> (align_model, metadata).
 _align_models: dict[str, tuple] = {}
+# Warm MediaPipe landmarkers (Phase 3 vision). Loaded once, reused across jobs (safe because
+# analysis jobs run one-at-a-time — see the single-job lock in web.state.JobRegistry).
+_face_landmarker: object | None = None
+_pose_landmarker: object | None = None
 _lock = threading.Lock()
 
 
@@ -79,13 +83,56 @@ def get_align_model(lang: str):
     return cached
 
 
+def get_face_landmarker():
+    """Return the cached MediaPipe FaceLandmarker, building it once (double-checked lock).
+
+    Construction (and the mediapipe import) lives in ``vision.py`` and is called lazily here,
+    so this module stays importable without the ``[vision]`` extra.
+    """
+    global _face_landmarker
+    if _face_landmarker is not None:
+        return _face_landmarker
+    with _lock:
+        if _face_landmarker is None:
+            from . import vision  # noqa: PLC0415
+
+            _face_landmarker = vision._build_face_landmarker()
+    return _face_landmarker
+
+
+def get_pose_landmarker():
+    """Return the cached MediaPipe PoseLandmarker (lite), building it once."""
+    global _pose_landmarker
+    if _pose_landmarker is not None:
+        return _pose_landmarker
+    with _lock:
+        if _pose_landmarker is None:
+            from . import vision  # noqa: PLC0415
+
+            _pose_landmarker = vision._build_pose_landmarker()
+    return _pose_landmarker
+
+
 def warm(model_name: str, threads: int, langs: tuple[str, ...] = ("es", "en")) -> None:
-    """Preload the ASR model and the alignment models for ``langs``. Idempotent."""
+    """Preload the ASR model and the alignment models for ``langs``. Idempotent.
+
+    Also warms the MediaPipe landmarkers when vision is enabled and the extra is installed,
+    so the first analysis does not pay the model-load/download cost. Any vision failure
+    (missing extra, offline download) is swallowed — it must not abort warmup.
+    """
     get_asr_model(model_name, threads)
     for lang in langs:
         try:
             get_align_model(lang)
         except Exception:  # pragma: no cover - a missing language must not abort warmup
+            pass
+    from . import config  # noqa: PLC0415
+
+    if config.VISION_ENABLED:
+        try:
+            get_face_landmarker()
+            get_pose_landmarker()
+        except Exception:  # pragma: no cover - vision optional; degrade to verbal-only
             pass
 
 
@@ -96,6 +143,9 @@ def is_warm(model_name: str) -> bool:
 
 def reset() -> None:
     """Drop all cached models (test hygiene)."""
+    global _face_landmarker, _pose_landmarker
     with _lock:
         _asr_models.clear()
         _align_models.clear()
+        _face_landmarker = None
+        _pose_landmarker = None

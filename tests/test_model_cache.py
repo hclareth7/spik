@@ -12,12 +12,16 @@ import types
 
 import pytest
 
-from spik import model_cache
+from spik import config, model_cache, vision
 
 
 @pytest.fixture
 def fake_whisperx(monkeypatch):
-    """Inject a fake whisperx module with load counters; reset the cache around the test."""
+    """Inject a fake whisperx module with load counters; reset the cache around the test.
+
+    Vision warmup is disabled here so ``warm()`` never touches MediaPipe/network — the
+    landmarker cache has its own tests below with fake builders.
+    """
     mod = types.ModuleType("whisperx")
     mod.asr_loads = 0
     mod.align_loads = []  # one entry per load, with the language code
@@ -34,9 +38,66 @@ def fake_whisperx(monkeypatch):
     mod.load_align_model = load_align_model
 
     monkeypatch.setitem(sys.modules, "whisperx", mod)
+    monkeypatch.setattr(config, "VISION_ENABLED", False)
     model_cache.reset()
     yield mod
     model_cache.reset()
+
+
+@pytest.fixture
+def fake_landmarkers(monkeypatch):
+    """Replace the MediaPipe landmarker builders with counters (no mediapipe/network)."""
+    counters = {"face": 0, "pose": 0}
+
+    def build_face():
+        counters["face"] += 1
+        return f"face-landmarker-{counters['face']}"
+
+    def build_pose():
+        counters["pose"] += 1
+        return f"pose-landmarker-{counters['pose']}"
+
+    monkeypatch.setattr(vision, "_build_face_landmarker", build_face)
+    monkeypatch.setattr(vision, "_build_pose_landmarker", build_pose)
+    model_cache.reset()
+    yield counters
+    model_cache.reset()
+
+
+def test_landmarkers_loaded_once(fake_landmarkers):
+    a = model_cache.get_face_landmarker()
+    b = model_cache.get_face_landmarker()
+    p = model_cache.get_pose_landmarker()
+    model_cache.get_pose_landmarker()
+    assert a is b
+    assert a == "face-landmarker-1"
+    assert p == "pose-landmarker-1"
+    assert fake_landmarkers == {"face": 1, "pose": 1}
+
+
+def test_warm_warms_vision_when_enabled(fake_whisperx, fake_landmarkers, monkeypatch):
+    monkeypatch.setattr(config, "VISION_ENABLED", True)
+    model_cache.warm("medium", 4, langs=("es",))
+    assert fake_landmarkers == {"face": 1, "pose": 1}
+
+
+def test_warm_skips_vision_when_disabled(fake_whisperx, fake_landmarkers):
+    # fake_whisperx already sets VISION_ENABLED=False.
+    model_cache.warm("medium", 4, langs=("es",))
+    assert fake_landmarkers == {"face": 0, "pose": 0}
+
+
+def test_warm_swallows_vision_errors(fake_whisperx, monkeypatch):
+    monkeypatch.setattr(config, "VISION_ENABLED", True)
+
+    def _boom():
+        raise RuntimeError("mediapipe missing")
+
+    monkeypatch.setattr(vision, "_build_face_landmarker", _boom)
+    monkeypatch.setattr(vision, "_build_pose_landmarker", _boom)
+    # Must not raise — a vision failure degrades to verbal-only.
+    model_cache.warm("medium", 4, langs=("es",))
+    assert fake_whisperx.asr_loads == 1
 
 
 def test_asr_model_loaded_once(fake_whisperx):

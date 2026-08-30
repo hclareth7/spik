@@ -86,6 +86,14 @@ Evaluate using these rubrics:
 - Public-speaking criteria (Toastmasters): clarity, pacing, filler control, energy,
   structure and connection with the audience.
 
+When NONVERBAL metrics are provided (gestures, facial expression, posture, eye-contact
+proxy — all measured locally), use them too: emit "gestures" and/or "face" improvements when
+the numbers warrant it. Be precise about what they mean: "eye contact" is a HEAD-ORIENTATION
+proxy (how often the head faced the camera), "expression" is observable blendshape movement
+(smile/brow/blink) and NOT emotion, and "posture" is a shoulder/head heuristic. Frame these as
+observable behaviors, never as inferred feelings. If a nonverbal ratio is based on few detected
+frames (low face/pose detection), treat it as low-confidence and say so instead of over-claiming.
+
 Be specific, concrete and actionable. Cite examples from the transcript when possible.
 Be honest but constructive. Answer in the same language as the transcript.\
 """
@@ -143,12 +151,25 @@ _JSON_SHAPE = """\
 """
 
 
-def _build_user_content(transcript_text: str, metrics: dict) -> str:
-    """Assemble the user message with metrics + transcript (text only)."""
+def _build_user_content(
+    transcript_text: str, metrics: dict, vision_metrics: dict | None = None,
+) -> str:
+    """Assemble the user message with metrics + transcript (text only).
+
+    ``vision_metrics`` (nonverbal: gestures/expression/posture/eye-contact, computed locally)
+    is included as an extra JSON block when present. Only NUMBERS are sent — never frames.
+    """
+    nonverbal_block = ""
+    if vision_metrics:
+        nonverbal_block = (
+            "== NONVERBAL METRICS (gestures/face/posture/eye-contact, computed locally) ==\n"
+            f"{json.dumps(vision_metrics, ensure_ascii=False, indent=2)}\n\n"
+        )
     return (
         "Analyze this communication practice session.\n\n"
         "== OBJECTIVE METRICS (computed locally) ==\n"
         f"{json.dumps(metrics, ensure_ascii=False, indent=2)}\n\n"
+        f"{nonverbal_block}"
         "== TRANSCRIPT ==\n"
         f"{transcript_text}\n\n"
         "Give feedback following the rubrics. Prioritize the 2-3 highest-impact changes.\n\n"
@@ -241,9 +262,15 @@ def _complete(client, kwargs: dict):
         return s.get_final_message()
 
 
-def generate(transcript_text: str, metrics: dict, model: str | None = None) -> Feedback:
+def generate(
+    transcript_text: str,
+    metrics: dict,
+    model: str | None = None,
+    vision_metrics: dict | None = None,
+) -> Feedback:
     """Generate feedback with Claude via the configured provider (Vertex by default).
 
+    ``vision_metrics`` (optional nonverbal metrics) is folded into the prompt when present.
     Raises RuntimeError with a clear message if configuration or the SDK is missing.
     """
     model = model or config.CLAUDE_MODEL
@@ -256,7 +283,10 @@ def generate(transcript_text: str, metrics: dict, model: str | None = None) -> F
         model=model,
         max_tokens=4000,
         system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": _build_user_content(transcript_text, metrics)}],
+        messages=[{
+            "role": "user",
+            "content": _build_user_content(transcript_text, metrics, vision_metrics),
+        }],
     ))
 
     if response.stop_reason == "refusal":  # pragma: no cover - safeguard
