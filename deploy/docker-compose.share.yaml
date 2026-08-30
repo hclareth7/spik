@@ -1,0 +1,71 @@
+# spik "appliance" — la app COMPLETA en un contenedor, para compartir con amigos (Linux).
+#
+# A diferencia de docker-compose.yaml (tu despliegue detrás de Traefik, solo análisis), este
+# perfil corre TODO dentro del contenedor: checker/preview + grabar + análisis + feedback.
+# No usa Traefik ni dominio: el amigo abre http://localhost:8000.
+#
+# Ejecutar desde la raíz del repo:
+#   podman-compose -f deploy/docker-compose.share.yaml up -d
+#   # luego abre http://localhost:8000
+#
+# Requisitos (ver deploy/README.md → "Compartir con amigos"):
+#   - Linux de escritorio con PipeWire o PulseAudio (para cámara y micro).
+#   - podman (rootless) o docker.
+#   - .env con la clave propia:  SPIK_PROVIDER=anthropic  y  ANTHROPIC_API_KEY=sk-ant-...
+#     (sin clave, el contenedor corre solo métricas locales; el feedback de Claude queda opcional).
+#
+# Privacidad ("todo local"): el puerto se publica SOLO en 127.0.0.1 (no en la LAN). El video/audio
+# se graban en ./data y nunca salen de la máquina; a Claude solo va texto/métricas.
+
+services:
+  spik:
+    image: ghcr.io/hclareth7/spik:latest
+    # Para construir localmente en vez de tirar de GHCR:
+    #   podman-compose -f deploy/docker-compose.share.yaml build
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: spik-appliance
+    restart: unless-stopped
+
+    # privileged: acceso a los dispositivos del host (/dev/video* para la cámara, /dev/dri para
+    # la GPU). El usuario lo autorizó para uso local entre amigos. Endurecimiento futuro: cambiar
+    # por `devices:` explícitos + grupos `video`/`render` en vez de privilegios totales.
+    privileged: true
+
+    # user 0:0 (root DENTRO del contenedor). La imagen trae `USER spik` (uid 10001) por defecto, que
+    # NO puede abrir /dev/video* (root:video 0660) ni escribir en /data → hay que forzar root.
+    # En podman ROOTLESS ese "root" mapea a TU usuario del host (sin privilegio real sobre el host),
+    # así que accede a la cámara/el micro/socket y escribe ./data sin líos de permisos.
+    # (En docker ROOTFUL esto es root REAL; ver el caveat en deploy/README.md.)
+    user: "0:0"
+
+    env_file:
+      - ../.env
+    environment:
+      # Modo completo en contenedor: captura + análisis, sin filtro de ruido en vivo.
+      - SPIK_MODE=appliance
+      # Feedback vía Claude API con la clave del propio usuario (ANTHROPIC_API_KEY sale del .env).
+      - SPIK_PROVIDER=anthropic
+      # Audio: apunta a la ruta fija donde montamos el socket de PipeWire/Pulse del host (abajo).
+      - PULSE_SERVER=unix:/tmp/pulse-native
+
+    volumes:
+      # Grabaciones + SQLite + caché de modelos. `:z` = relabel SELinux compartido (no chown).
+      - ../data:/data:z
+      # Socket de audio del host (PipeWire expone la capa Pulse aquí). Montado a una ruta fija
+      # para no depender del UID en la ruta. `:z` para SELinux.
+      - ${XDG_RUNTIME_DIR}/pulse/native:/tmp/pulse-native:z
+
+    # Solo loopback: la app NO queda expuesta a la red local, solo a este equipo.
+    ports:
+      - "127.0.0.1:8000:8000"
+
+    # Healthcheck a nivel de compose (podman ignora el HEALTHCHECK del Dockerfile en OCI).
+    # /api/config no toca hardware ni Claude.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/config',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3

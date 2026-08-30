@@ -1,0 +1,29 @@
+# Secretos — NUNCA commitear
+.env
+
+# data/ es 100% LOCAL ("todo local"): grabaciones, audio extraído, DB de sesiones,
+# prefs de runtime (.ui-prefs.json/.projects.json) y la CACHÉ de modelos descargados
+# (data/.cache/ — WhisperX/HuggingFace/torch, varios GB). NADA de data/ va al repo.
+# Se conserva la carpeta vacía con data/.gitkeep para que exista tras clonar.
+/data/*
+!/data/.gitkeep
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+dist/
+build/
+
+# Modelos descargados (Whisper, etc.)
+models/
+
+# Frontend (React + Vite). El build (web/dist, frontend/dist) ya lo cubre `dist/` arriba.
+# package-lock.json SÍ se commitea (reproducibilidad del build).
+node_modules/
+frontend/node_modules/
+*.tsbuildinfo

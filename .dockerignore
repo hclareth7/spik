@@ -1,0 +1,32 @@
+# Contexto de build mínimo y sin secretos.
+.venv/
+**/__pycache__/
+*.pyc
+.git/
+.gitignore
+
+# Nunca meter secretos ni datos personales en la imagen.
+.env
+data/
+*.wav
+*.mkv
+*.mp4
+
+# No se necesita en runtime.
+tests/
+deploy/
+.github/
+camera/
+noise/
+
+# Frontend: el build corre en el stage 'frontend' del Dockerfile. Se excluyen los
+# artefactos locales (node_modules y el dist ya compilado en el host) para que el
+# contexto sea pequeño y la imagen use SIEMPRE un build limpio y reproducible.
+frontend/node_modules/
+frontend/dist/
+web/dist/
+# NOTA: capture/ SÍ se incluye — capture/record.sh se usa en runtime (modo 'appliance').
+*.md
+!README.md
+Dockerfile
+.dockerignore

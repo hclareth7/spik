@@ -1,0 +1,315 @@
+/* Component classes — ported VERBATIM from web/static/app.css.
+   Values are byte-identical to the legacy stylesheet (only the leading :root/reset
+   and the Google Fonts @import were split out / removed). */
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  background:
+    radial-gradient(1200px 600px at 80% -10%, rgba(var(--accent-rgb),0.06), transparent 60%),
+    var(--bg);
+  color: var(--text-primary);
+  min-height: 100vh;
+}
+
+.page { max-width: 1100px; margin: 0 auto; padding: 48px 32px 96px; }
+
+.page-header { margin-bottom: 32px; }
+.page-header h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.03em; }
+/* Brand wordmark: the violet→cyan logo gradient clipped to the "spik" text. */
+.page-header h1 .accent {
+  color: var(--accent-text);
+  background: var(--brand-gradient);
+  -webkit-background-clip: text; background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+/* Logo mark next to the wordmark (favicon.svg). */
+.brand-row { display: flex; align-items: center; gap: 12px; }
+.brand-logo { width: 36px; height: 36px; flex-shrink: 0; display: block; }
+.page-header .subtitle {
+  font-size: 14px; color: var(--text-secondary); font-weight: 300; margin-top: 6px; line-height: 1.6;
+}
+
+/* ── Tabs (pill) ── */
+.tabs { display: flex; gap: 4px; margin-bottom: 28px; }
+.tab {
+  padding: 8px 18px; border-radius: 100px; font-size: 13px; font-weight: 500;
+  color: var(--text-tertiary); background: transparent; border: none; cursor: pointer;
+  font-family: inherit; transition: color 120ms, background 120ms;
+}
+.tab:hover { color: var(--text-secondary); background: var(--hover-bg); }
+.tab.active { color: var(--text-primary); background: var(--active-bg); }
+
+.tabpanel { display: none; }
+.tabpanel.active { display: block; }
+
+/* ── Cards / glass panels ── */
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 20px; }
+/* min-width:0 evita que un hijo con contenido ancho (nombres de dispositivo largos, texto
+   monoespaciado) desborde su celda de grid y se salga del card. */
+.grid > * { min-width: 0; }
+.widget-card {
+  background: var(--surface); backdrop-filter: blur(30px); -webkit-backdrop-filter: blur(30px);
+  border: 1px solid var(--border); border-radius: 20px; padding: 24px;
+  transition: border-color 150ms; overflow-wrap: break-word; min-width: 0;
+}
+.widget-card:hover { border-color: var(--border-hover); }
+.widget-card.wide { grid-column: 1 / -1; }
+.card-label {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--text-tertiary); margin-bottom: 16px;
+}
+
+/* ── Glass buttons ── */
+.glass {
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 8px 20px; border-radius: 100px; border: 1px solid transparent;
+  background: rgba(255,255,255,0.04); color: var(--text-secondary);
+  font-family: inherit; font-size: 13px; font-weight: 500; cursor: pointer;
+  backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px);
+  transition: background 200ms, border-color 200ms, box-shadow 200ms, color 200ms, transform 200ms;
+}
+.glass:hover {
+  background: rgba(var(--accent-rgb),0.08); border-color: var(--glow-border);
+  box-shadow: inset 0 0 20px var(--glow); color: var(--text-primary); transform: scale(1.02);
+}
+.glass:active { transform: scale(0.97); transition-duration: 80ms; }
+.glass:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+.glass.primary {
+  background: rgba(var(--accent-rgb),0.10); color: var(--accent-text); border-color: rgba(var(--accent-rgb),0.08);
+}
+.glass.primary:hover { background: rgba(var(--accent-rgb),0.16); border-color: rgba(var(--accent-rgb),0.20); }
+.glass.danger { color: var(--danger); border-color: rgba(239,68,68,0.15); }
+.glass.danger:hover { background: rgba(239,68,68,0.08); border-color: rgba(239,68,68,0.20); color: var(--danger); }
+.glass.sm { padding: 5px 14px; font-size: 11px; }
+
+/* ── Toggle ── */
+.toggle {
+  width: 44px; height: 24px; background: var(--border); border-radius: 12px;
+  cursor: pointer; position: relative; transition: background 200ms; border: none; flex-shrink: 0;
+}
+.toggle.active { background: var(--accent-solid); }
+.toggle::after {
+  content: ''; position: absolute; top: 3px; left: 3px; width: 18px; height: 18px;
+  background: white; border-radius: 50%; transition: transform 200ms; box-shadow: 0 1px 4px rgba(0,0,0,0.2);
+}
+.toggle.active::after { transform: translateX(20px); }
+
+/* ── Slider ── */
+.slider {
+  -webkit-appearance: none; appearance: none; height: 4px; background: var(--border);
+  border-radius: 2px; outline: none; cursor: pointer; width: 100%;
+}
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none; width: 16px; height: 16px; background: var(--accent-solid);
+  border-radius: 50%; cursor: pointer; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+.slider::-moz-range-thumb {
+  width: 16px; height: 16px; background: var(--accent-solid); border-radius: 50%;
+  cursor: pointer; border: none; box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+/* ── Setting rows ── */
+.setting-row {
+  display: flex; align-items: center; justify-content: space-between; gap: 16px;
+  padding: 12px 0; border-bottom: 1px solid var(--border);
+}
+.setting-row:last-child { border-bottom: none; }
+.setting-label { font-size: 13px; color: var(--text-secondary); display: flex; align-items: center; gap: 8px; }
+.setting-value { font-size: 13px; color: var(--text-primary); }
+
+/* ── Device select ── */
+select.picker {
+  /* color-scheme: dark hace que el navegador dibuje el desplegable nativo (y sus opciones)
+     en oscuro, así el texto se lee. Antes las opciones salían con fondo claro = invisibles. */
+  color-scheme: dark;
+  appearance: none; -webkit-appearance: none;
+  background-color: rgba(255,255,255,0.04); color: var(--text-primary);
+  /* chevron SVG solo-trazo (stroke = --text-secondary), coherente con los widgets de nout */
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23B6BCC6' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'><polyline points='6 9 12 15 18 9'/></svg>");
+  background-repeat: no-repeat; background-position: right 12px center;
+  border: 1px solid var(--border); border-radius: 100px;
+  padding: 6px 34px 6px 14px; font-family: inherit; font-size: 13px; cursor: pointer;
+  outline: none; max-width: 100%; text-overflow: ellipsis; transition: border-color 120ms;
+}
+select.picker:hover { border-color: var(--border-hover); }
+select.picker:focus { border-color: var(--border-focus); }
+select.picker option { background-color: var(--surface-solid); color: var(--text-primary); }
+
+/* ── Custom dropdown (Picker) — styled options the native <select> can't do ── */
+/* min-width:0 lets the trigger shrink inside a flex row (setting-row) so long values
+   (PipeWire source names) ellipsize INSIDE the card instead of overflowing it. */
+.picker2 { position: relative; min-width: 0; display: inline-block; }
+.picker2-trigger {
+  display: inline-flex; align-items: center; gap: 8px; width: 100%; max-width: 100%;
+  background-color: rgba(255,255,255,0.04); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 100px;
+  padding: 6px 12px 6px 14px; font-family: inherit; font-size: 13px; cursor: pointer;
+  outline: none; transition: border-color 120ms;
+}
+.picker2-trigger:hover { border-color: var(--border-hover); }
+.picker2-trigger:focus-visible { border-color: var(--border-focus); }
+.picker2-value {
+  flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  text-align: left;
+}
+.picker2-chevron { flex-shrink: 0; color: var(--text-secondary); }
+/* Portaled to <body> (see Picker.tsx): position:fixed + coordinates set inline from the
+   trigger's rect. z-index is huge so it clears every card; being a <body> child, it is not
+   trapped by any .widget-card backdrop-filter stacking context. */
+.picker2-list {
+  position: fixed; z-index: 9999;
+  max-width: min(360px, 90vw); max-height: 280px; overflow-y: auto;
+  list-style: none; margin: 0; padding: 6px;
+  background: var(--surface-solid); border: 1px solid var(--border); border-radius: 14px;
+  box-shadow: 0 12px 32px rgba(0,0,0,0.45);
+}
+.picker2-option {
+  padding: 8px 12px; border-radius: 10px; font-size: 13px; color: var(--text-secondary);
+  cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  transition: background 100ms, color 100ms;
+}
+.picker2-option.highlight { background: var(--hover-bg); color: var(--text-primary); }
+.picker2-option.selected { color: var(--accent-text); }
+.picker2-option.selected.highlight { background: rgba(var(--accent-rgb),0.12); }
+
+/* ── Camera preview ── */
+.preview-wrap {
+  position: relative; border-radius: 16px; overflow: hidden; background: #000;
+  border: 1px solid var(--border); aspect-ratio: 16 / 9; display: flex; align-items: center; justify-content: center;
+}
+.preview-wrap img { width: 100%; height: 100%; object-fit: contain; display: block; }
+.preview-placeholder { color: var(--text-tertiary); font-size: 13px; }
+.rec-dot {
+  position: absolute; top: 12px; left: 12px; display: none; align-items: center; gap: 8px;
+  padding: 4px 12px; border-radius: 100px; background: rgba(239,68,68,0.12); color: var(--danger);
+  font-size: 12px; font-weight: 600; letter-spacing: 0.04em;
+}
+.rec-dot.on { display: inline-flex; }
+.rec-dot span.blink { width: 8px; height: 8px; border-radius: 50%; background: var(--danger); }
+
+/* ── VU meter (construido con el widget focus-bar de nout, recoloreado) ── */
+.vu-row { display: flex; align-items: center; gap: 12px; padding: 8px 0; }
+.vu-label { width: 40px; font-size: 13px; font-weight: 500; color: var(--text-secondary); }
+.vu-track { flex: 1; height: 10px; border-radius: 5px; background: var(--hover-bg); overflow: hidden; }
+.vu-fill { height: 100%; border-radius: 5px; background: var(--accent-solid); width: 0%;
+  transition: width 120ms linear, background 300ms; }
+.vu-value { width: 72px; font-family: 'JetBrains Mono', monospace; font-size: 13px; color: var(--text-tertiary); text-align: right; }
+.vu-hint { font-size: 12px; color: var(--text-tertiary); margin-top: 8px; line-height: 1.5; }
+
+/* ── Prueba de voz (reproductor) ── */
+#micTestWrap audio { width: 100%; margin-top: 4px; color-scheme: dark; }
+#cameraInfo { overflow-x: auto; }
+
+/* ── Timer ── */
+.timer { font-family: 'JetBrains Mono', monospace; font-size: 40px; font-weight: 300; letter-spacing: -0.02em; }
+.timer.idle { color: var(--text-ghost); }
+
+/* ── Feedback ── */
+.score-badge {
+  font-family: 'JetBrains Mono', monospace; font-size: 40px; font-weight: 300; color: var(--accent-text);
+}
+.score-badge small { font-size: 16px; color: var(--text-tertiary); }
+.ai-insight {
+  padding: 16px; border-radius: 16px; background: var(--surface); border: 1px solid var(--border);
+  font-size: 14px; color: var(--text-secondary); line-height: 1.6;
+}
+.list-clean { list-style: none; display: flex; flex-direction: column; gap: 10px; }
+.list-clean li { font-size: 14px; color: var(--text-primary); line-height: 1.5; display: flex; gap: 10px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; margin-top: 7px; flex-shrink: 0; }
+.dot.ok { background: var(--success); }
+.dot.warn { background: var(--warning); }
+.dot.accent { background: var(--accent-solid); }
+.rewrite { padding: 12px 16px; border-radius: 12px; background: var(--note-neutral-bg); }
+.rewrite .before { color: var(--text-tertiary); font-size: 13px; text-decoration: line-through; }
+.rewrite .after { color: var(--text-primary); font-size: 14px; margin-top: 6px; }
+.metric-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px,1fr)); gap: 18px; }
+.metric-value { font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 300; }
+.metric-label { font-size: 12px; color: var(--text-tertiary); margin-top: 2px; }
+.cost-note { font-size: 12px; color: var(--text-tertiary); margin-top: 16px; line-height: 1.6; }
+
+/* ── History bars (focus-bar de nout) ── */
+.hist-row { display: flex; align-items: center; gap: 12px; padding: 6px 0; }
+.hist-label { width: 96px; font-size: 12px; color: var(--text-secondary); font-family: 'JetBrains Mono', monospace; }
+.hist-track { flex: 1; height: 8px; border-radius: 4px; background: var(--hover-bg); overflow: hidden; }
+.hist-fill { height: 100%; border-radius: 4px; background: var(--accent-solid); }
+.hist-value { width: 44px; font-family: 'JetBrains Mono', monospace; font-size: 12px; color: var(--text-tertiary); text-align: right; }
+
+/* ── History list (grabaciones por proyecto) ── */
+.hist-group { margin-bottom: 18px; }
+.hist-group-head {
+  font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--accent-text); margin: 4px 0 8px;
+}
+.hist-item {
+  display: flex; align-items: center; gap: 14px; padding: 10px 12px; border-radius: 12px;
+  border: 1px solid var(--border); background: rgba(255,255,255,0.02); cursor: pointer;
+  transition: border-color 120ms, background 120ms; margin-bottom: 8px;
+}
+.hist-item:hover { border-color: var(--border-hover); background: var(--hover-bg); }
+.hist-item-score {
+  font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 300;
+  color: var(--accent-text); width: 40px; text-align: center; flex-shrink: 0;
+}
+.hist-item-info { flex: 1; min-width: 0; }
+.hist-item-name { font-size: 14px; color: var(--text-primary); overflow-wrap: anywhere; }
+.hist-item-date { font-size: 12px; color: var(--text-tertiary); font-family: 'JetBrains Mono', monospace; margin-top: 2px; }
+.hist-item-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+/* ── Text input (nombre de grabación, etc.) ── */
+.text-input {
+  color-scheme: dark; background-color: rgba(255,255,255,0.04); color: var(--text-primary);
+  border: 1px solid var(--border); border-radius: 100px; padding: 6px 14px;
+  font-family: inherit; font-size: 13px; outline: none; transition: border-color 120ms;
+}
+.text-input:hover { border-color: var(--border-hover); }
+.text-input:focus { border-color: var(--border-focus); }
+.text-input::placeholder { color: var(--text-tertiary); }
+
+/* ── Barra de progreso del análisis (jobs largos) ── */
+.progress-wrap { display: flex; flex-direction: column; gap: 8px; }
+.progress-head { display: flex; justify-content: space-between; font-size: 13px; color: var(--text-secondary); }
+.progress-head span:last-child { font-family: 'JetBrains Mono', monospace; color: var(--accent-text); }
+.progress-track { height: 10px; border-radius: 5px; background: var(--hover-bg); overflow: hidden; }
+.progress-fill {
+  height: 100%; border-radius: 5px; width: 0%;
+  background: linear-gradient(90deg, rgb(var(--accent-rgb)), rgb(var(--accent-2-rgb)));
+  transition: width 400ms ease;
+}
+
+/* ── Status text ── */
+.muted { color: var(--text-tertiary); font-size: 13px; line-height: 1.6; }
+.status-line { font-size: 13px; color: var(--text-secondary); margin-top: 12px; min-height: 20px; }
+.status-line.err { color: var(--danger); }
+.status-line.ok { color: var(--success); }
+.spinner {
+  display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid var(--border); border-top-color: var(--accent-solid);
+  animation: spin 800ms linear infinite; vertical-align: -2px; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* ── Modal (portaled to <body>, like Picker) ──
+   Backdrop covers the viewport; the card is centered glass matching the site. z-index sits
+   above the Picker listbox (9999) so a picker inside a modal still paints over the card. */
+.modal-backdrop {
+  position: fixed; inset: 0; z-index: 10000;
+  display: flex; align-items: center; justify-content: center; padding: 24px;
+  background: rgba(0,0,0,0.55); backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  animation: modal-fade 120ms ease;
+}
+.modal-card {
+  width: 100%; max-width: 440px;
+  background: var(--surface-elevated); border: 1px solid var(--border-hover);
+  border-radius: 20px; padding: 24px;
+  box-shadow: 0 24px 64px rgba(0,0,0,0.55);
+  animation: modal-pop 140ms ease;
+}
+.modal-title { font-size: 16px; font-weight: 600; color: var(--text-primary); margin-bottom: 6px; }
+.modal-body { font-size: 14px; color: var(--text-secondary); line-height: 1.6; margin: 12px 0 20px; }
+.modal-footer { display: flex; justify-content: flex-end; gap: 8px; flex-wrap: wrap; }
+@keyframes modal-fade { from { opacity: 0; } to { opacity: 1; } }
+@keyframes modal-pop { from { opacity: 0; transform: translateY(8px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0s !important; animation: none !important; }
+}

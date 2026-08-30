@@ -1,0 +1,43 @@
+/* Design tokens — ported VERBATIM from web/static/app.css (:root) plus the box reset.
+   Tokens and widgets come from the nout design system (spec/mockups/nout-widgets.html):
+   glass morphism, pill buttons/tabs (radius 100px), no border-left, restrained color,
+   visual feedback (no sound), calm transitions. CSS custom properties only.
+
+   NOTE: the Google Fonts @import that used to live here has been REMOVED. Fonts are now
+   vendored locally (self-hosted via @fontsource, imported in src/main.tsx) — no CDN. */
+
+*, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg: #0B0D10;
+  --surface: rgba(18,20,24,0.75);
+  --surface-solid: #121418;
+  --surface-elevated: rgba(24,27,32,0.92);
+  --text-primary: #F5F7FA;
+  --text-secondary: #B6BCC6;
+  --text-tertiary: #6B7280;
+  --text-ghost: #3D4450;
+  --border: rgba(255,255,255,0.08);
+  --border-hover: rgba(255,255,255,0.14);
+  /* Brand palette — derived from favicon.svg (violet #6d5efc → cyan #22d3ee).
+     The accent is single-sourced as an RGB channel triplet so every alpha variant
+     (borders, glows, active bg) references ONE color and the identity never drifts. */
+  --accent-rgb: 124, 111, 252;      /* #7C6FFC — logo violet */
+  --accent-2-rgb: 34, 211, 238;     /* #22D3EE — logo cyan (secondary) */
+  --brand-gradient: linear-gradient(135deg, #6d5efc, #22d3ee);
+  --border-focus: rgba(var(--accent-rgb),0.5);
+  --accent: rgba(var(--accent-rgb),0.6);
+  --accent-solid: #7C6FFC;
+  --accent-text: #B3A9FF;           /* lightened for AA contrast on the near-black --bg */
+  --hover-bg: rgba(255,255,255,0.06);
+  --active-bg: rgba(var(--accent-rgb),0.12);
+  --danger: #EF4444;
+  --success: #10B981;
+  --warning: #F59E0B;
+  --glow: rgba(var(--accent-rgb),0.06);
+  --glow-border: rgba(var(--accent-rgb),0.12);
+  --glow-strong: rgba(var(--accent-rgb),0.10);
+  --note-neutral-bg: rgba(20,22,26,0.88);
+  --note-green-bg: rgba(16,26,22,0.88);
+  --note-amber-bg: rgba(28,24,16,0.88);
+}

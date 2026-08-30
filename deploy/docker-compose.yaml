@@ -1,0 +1,70 @@
+# Despliegue local de spik (modo servidor) detrás del Traefik local, en spik.hclareth.local.
+#
+# Ejecutar desde la raíz del repo:
+#   podman-compose -f deploy/docker-compose.yaml up -d
+#
+# Requisitos previos (ver deploy/README.md):
+#   - Traefik corriendo con la red externa `traefik-net` y el cert wildcard *.hclareth.local.
+#   - Entrada en /etc/hosts:  127.0.0.1 spik.hclareth.local
+#   - ADC de gcloud presente:  gcloud auth application-default login
+#   - .env con SPIK_VERTEX_PROJECT (y SPIK_VERTEX_REGION) — nunca se commitea.
+#
+# Privacidad ("todo local"): el puerto NO se publica al host; el acceso es solo vía Traefik.
+# El video/audio nunca sale de la máquina; a Vertex solo va texto/métricas.
+
+services:
+  spik:
+    image: ghcr.io/hclareth7/spik:latest
+    # Para construir localmente en vez de tirar de GHCR:
+    #   podman-compose -f deploy/docker-compose.yaml build
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    container_name: spik
+    restart: unless-stopped
+
+    # Compartir ./data (propiedad del usuario del host) con la app de captura local.
+    # En ROOTLESS podman el usuario del host se mapea a uid 0 DENTRO del contenedor, así que
+    # los archivos que tú creas aparecen como root:root adentro. Para leer/escribir ./data hay
+    # que correr como uid 0 EN EL NAMESPACE — que fuera sigue siendo tu usuario sin privilegios
+    # (NO es root real, no hay escalada). Por eso el default es 0:0.
+    #   - Rootless (caso local): deja 0:0.
+    #   - Rootful/otro dueño de ./data: exporta SPIK_UID/SPIK_GID al dueño real de ./data.
+    user: "${SPIK_UID:-0}:${SPIK_GID:-0}"
+
+    env_file:
+      - ../.env
+    environment:
+      - SPIK_MODE=server
+      # ADC de gcloud (montado RO abajo) para el feedback vía Vertex. Sin API keys.
+      - GOOGLE_APPLICATION_CREDENTIALS=/gcloud/adc.json
+
+    volumes:
+      # Grabaciones + SQLite + caché de modelos. `:z` = relabel SELinux compartido (no chown).
+      - ../data:/data:z
+      # Credenciales ADC del host en solo-lectura (nunca se copian a la imagen).
+      - ${HOME}/.config/gcloud/application_default_credentials.json:/gcloud/adc.json:ro,z
+
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.spik.rule=Host(`spik.hclareth.local`)"
+      - "traefik.http.routers.spik.entrypoints=websecure"
+      - "traefik.http.routers.spik.tls=true"
+      - "traefik.http.services.spik.loadbalancer.server.port=8000"
+
+    networks:
+      - traefik-net
+
+    # Healthcheck a nivel de compose: podman ignora el HEALTHCHECK del Dockerfile en formato OCI,
+    # así que lo definimos aquí (independiente del formato de imagen). /api/config no toca
+    # hardware ni Vertex.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/api/config',timeout=3).status==200 else 1)"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+      retries: 3
+
+networks:
+  traefik-net:
+    external: true
