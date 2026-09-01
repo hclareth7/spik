@@ -9,7 +9,7 @@
 package main
 
 import (
-	"embed"
+	_ "embed"
 	"log"
 	"os"
 
@@ -19,12 +19,12 @@ import (
 	"github.com/wailsapp/wails/v2/pkg/options/linux"
 )
 
-// The embedded dist holds only a placeholder (no index.html), so every request 404s in the
-// asset FS and falls through to AssetServer.Handler — our reverse proxy to Python. Wails
-// requires the directory to exist for the embed directive; it is intentionally unused.
+// appIcon is the spik brand mark (speech bubble + audio waveform), rasterized from
+// frontend/public/favicon.svg. Wails uses it for the Linux window / taskbar icon via
+// linux.Options.Icon (build/ is gitignored, so this PNG is force-added to the repo).
 //
-//go:embed all:frontend/dist
-var assets embed.FS
+//go:embed build/appicon.png
+var appIcon []byte
 
 func main() {
 	// WebKitGTK compositing fallbacks must be set on THIS process (the webview host) BEFORE
@@ -52,13 +52,17 @@ func main() {
 		MinWidth:         960,
 		MinHeight:        640,
 		BackgroundColour: &options.RGBA{R: 11, G: 13, B: 16, A: 255}, // #0B0D10, avoids white flash
+		// Handler-only (no Assets fs.FS): every request — including the root document — is
+		// served by our reverse proxy to the Python sidecar, which serves the real frontend
+		// (web/dist). Passing an Assets FS without an index.html makes Wails treat the root as
+		// a hard error instead of falling through to the Handler, so we omit it entirely.
 		AssetServer: &assetserver.Options{
-			Assets:  assets,
 			Handler: app.Handler(),
 		},
 		OnStartup:  app.startup,
 		OnShutdown: app.shutdown,
 		Linux: &linux.Options{
+			Icon:        appIcon,
 			ProgramName: "spik",
 		},
 	})
