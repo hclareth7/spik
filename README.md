@@ -185,7 +185,8 @@ podman-compose -f deploy/docker-compose.yaml up -d
 | 3 | Visión (gestos, postura, rostro, mirada) — `spik/vision.py` | ⬜ stub |
 | 4 | GUI web local (checker de inputs + grabar + feedback) + filtro de ruido RNNoise | ✅ |
 | 4b | Realce de imagen de cámara (v4l2loopback + GStreamer) | ⬜ diferido |
-| 5 | Empaquetado (Tauri) + feedback en tiempo real | ⬜ |
+| 4c | App de escritorio (Wails/Go) — misma UI web en ventana nativa (`desktop/`) | ✅ MVP |
+| 5 | Empaquetado autocontenido (intérprete + modelos embebidos) + feedback en tiempo real | ⬜ |
 
 ## Tests
 

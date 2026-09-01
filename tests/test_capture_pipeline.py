@@ -228,15 +228,21 @@ def test_vcam_input_falls_back_to_native_when_no_capped_mode():
 
 
 def test_preview_branch_unchanged_by_caps():
-    """Preview keeps its own trailing scale and -r 24, and gets no vcam-only caps/flags."""
+    """Preview keeps its own trailing scale and its own -r, and gets no vcam size cap.
+
+    Preview-only DOES get the low-latency demuxer flags + per-frame pipe flush (a preview with
+    no recording sharing the input), but never the vcam ``scale=min(...)`` input cap.
+    """
     cmd = build_capture_cmd(
         device="/dev/video4", sinks={SINK_PREVIEW}, formats=_MJPEG,
-        max_width=1280, fps=30,
+        max_width=1280, fps=15,
     )
     vf = cmd[cmd.index("-vf") + 1]
     assert vf == "scale=1280:-2:flags=lanczos"   # no leading scale=min(...), unchanged
-    assert "nobuffer" not in cmd and "low_delay" not in cmd
-    assert cmd[cmd.index("-r") + 1] == "24"      # preview's own cap, not the vcam 30
+    assert cmd[cmd.index("-r") + 1] == "30"      # preview's own cap, not the caps fps (15)
+    # Low-latency preview: demuxer flags on the input, per-frame flush on the pipe output.
+    assert "nobuffer" in cmd and "low_delay" in cmd
+    assert cmd[cmd.index("-flush_packets") + 1] == "1"
 
 
 def test_record_branch_unchanged_by_caps():

@@ -6,66 +6,33 @@ shares the one ffmpeg that opens the real camera — it no longer opens the devi
 
 from __future__ import annotations
 
+import asyncio
 from pathlib import Path
 
 from fastapi import APIRouter, Query
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from web import deps, state
-from web.capture_pipeline import SINK_PREVIEW
 from web.validation import _VIDEO_DEV_RE
 
 router = APIRouter()
 
-_JPEG_SOI = b"\xff\xd8"
-_JPEG_EOI = b"\xff\xd9"
 _BOUNDARY = b"speakframe"
 
-
-async def _mjpeg_stream(device: str):
-    """Yield a multipart/x-mixed-replace stream of JPEG frames from the capture session.
-
-    Starts (or, if already running, replaces) the single-owner ffmpeg with a preview sink
-    and reads its MJPEG stdout, re-framing each complete JPEG (SOI…EOI) into a multipart
-    part. Teardown is via ``state.capture`` so the device is reliably released even though
-    a StreamingResponse does not reliably observe the client disconnect.
-    """
-    proc = await state.capture.start(device=device, sinks={SINK_PREVIEW})
-    buf = b""
-    try:
-        while True:
-            chunk = await proc.stdout.read(65536)
-            if not chunk:
-                break
-            buf += chunk
-            # Extract each complete JPEG (SOI … EOI) and emit it as a multipart part.
-            while True:
-                soi = buf.find(_JPEG_SOI)
-                eoi = buf.find(_JPEG_EOI, soi + 2)
-                if soi == -1 or eoi == -1:
-                    break
-                frame = buf[soi : eoi + 2]
-                buf = buf[eoi + 2 :]
-                yield (
-                    b"--" + _BOUNDARY + b"\r\n"
-                    b"Content-Type: image/jpeg\r\n"
-                    b"Content-Length: " + str(len(frame)).encode() + b"\r\n\r\n"
-                    + frame + b"\r\n"
-                )
-    finally:
-        # Only tear down if we are still the active owner (a newer preview may have
-        # replaced us via start()'s reap).
-        if state.capture.proc is proc:
-            await state.capture.stop()
+# How long GET /video/snapshot.jpg waits for the first frame after starting a fresh preview
+# (ffmpeg open + first MJPEG frame), polled in 50 ms steps.
+_SNAPSHOT_WAIT_STEPS = 40
+_SNAPSHOT_WAIT_STEP_S = 0.05
 
 
 async def _fanout_stream():
-    """Stream the recording's live preview from the server-owned fan-out buffer.
+    """Yield a multipart/x-mixed-replace stream from the server-owned fan-out buffer.
 
-    Used ONLY while a recording is in progress: it reads the latest JPEG frames that the
-    capture session is already draining (``subscribe_frames``), so this generator never
-    touches ffmpeg's pipe. Its teardown does nothing to the capture session — a browser
-    disconnect must never be able to stop an in-progress recording.
+    Every complete JPEG frame is published by the capture session's single drain task
+    (``subscribe_frames``); this generator never touches ffmpeg's pipe, so any number of
+    clients can watch at once and a browser disconnect can never stall the capture (or an
+    in-progress recording). Teardown of the camera is explicit (POST /video/preview/stop),
+    since a StreamingResponse does not reliably observe the client disconnect.
     """
     async for frame in state.capture.subscribe_frames():
         yield (
@@ -81,18 +48,40 @@ async def preview(device: str = Query("/dev/video4")):
     deps.require_local()
     deps.require(bool(_VIDEO_DEV_RE.match(device)), "invalid video device")
     deps.require(Path(device).exists(), f"{device} does not exist")
-    # While recording, the single-owner ffmpeg already tees a preview branch that the server
-    # drains into a fan-out buffer. Serve from that instead of opening the camera a second time
-    # (it is single-open) — and this request's teardown never touches the recording.
-    if state.capture.is_recording():
-        return StreamingResponse(
-            _fanout_stream(),
-            media_type=f"multipart/x-mixed-replace; boundary={_BOUNDARY.decode()}",
-        )
+    # A recording already tees a drained preview branch; otherwise start a shared preview-only
+    # capture (idempotent — never opens the single-open camera twice). Both cases then stream
+    # from the same fan-out buffer.
+    if not state.capture.is_recording():
+        await state.capture.ensure_preview(device=device)
     return StreamingResponse(
-        _mjpeg_stream(device),
+        _fanout_stream(),
         media_type=f"multipart/x-mixed-replace; boundary={_BOUNDARY.decode()}",
     )
+
+
+@router.get("/video/snapshot.jpg")
+async def snapshot(device: str = Query("/dev/video4")):
+    """Return the latest single preview JPEG frame.
+
+    The desktop shell (WebKitGTK) cannot render an infinite multipart/x-mixed-replace stream
+    via streaming fetch, so its shim polls this finite endpoint ~15×/s instead. Reads the same
+    fan-out buffer the multipart stream uses; starts a shared preview capture on demand when
+    not already previewing/recording, then waits briefly for the first frame.
+    """
+    deps.require_local()
+    deps.require(bool(_VIDEO_DEV_RE.match(device)), "invalid video device")
+    deps.require(Path(device).exists(), f"{device} does not exist")
+    if not state.capture.is_recording():
+        await state.capture.ensure_preview(device=device)
+    frame = state.capture.latest_preview_frame()
+    for _ in range(_SNAPSHOT_WAIT_STEPS):
+        if frame is not None:
+            break
+        await asyncio.sleep(_SNAPSHOT_WAIT_STEP_S)
+        frame = state.capture.latest_preview_frame()
+    deps.require(frame is not None, "preview frame not available yet", status=503)
+    return Response(content=frame, media_type="image/jpeg",
+                    headers={"Cache-Control": "no-store"})
 
 
 @router.post("/video/preview/stop")

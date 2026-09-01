@@ -15,10 +15,10 @@ _HOST_SESSION_DETAIL = (
 )
 
 
-def require(cond: bool, msg: str) -> None:
-    """Raise HTTP 400 with ``msg`` unless ``cond`` holds."""
+def require(cond: bool, msg: str, status: int = 400) -> None:
+    """Raise ``HTTPException`` (default HTTP 400) with ``msg`` unless ``cond`` holds."""
     if not cond:
-        raise HTTPException(status_code=400, detail=msg)
+        raise HTTPException(status_code=status, detail=msg)
 
 
 def require_local() -> None:

@@ -68,12 +68,16 @@ async def mic_test_record(source: str = Query(...), seconds: float = Query(5.0))
     seconds = max(1.0, min(20.0, seconds))
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-    def _record() -> None:
+    def _record() -> bool:
         # parec (captura cruda) -> ffmpeg (escribe WAV, corta a -t segundos).
+        # Returns True if ffmpeg finished on its own, False if it had to be killed on timeout
+        # (a source that produces NO samples — e.g. suspended/absent — leaves ffmpeg blocked on
+        # pipe:0 forever, since -t only fires once input PTS reaches `seconds`).
         rec = subprocess.Popen(
             ["parec", "--format=s16le", "--rate=48000", "--channels=2", "-d", source],
             stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
         )
+        finished = True
         try:
             subprocess.run(
                 ["ffmpeg", "-hide_banner", "-loglevel", "error",
@@ -81,6 +85,9 @@ async def mic_test_record(source: str = Query(...), seconds: float = Query(5.0))
                  "-i", "pipe:0", "-y", str(MIC_TEST_WAV)],
                 stdin=rec.stdout, timeout=seconds + 15, check=False,
             )
+        except subprocess.TimeoutExpired:
+            # subprocess.run already killed ffmpeg; the source never produced data.
+            finished = False
         finally:
             if rec.poll() is None:
                 rec.terminate()
@@ -88,10 +95,18 @@ async def mic_test_record(source: str = Query(...), seconds: float = Query(5.0))
                     rec.wait(timeout=2)
                 except subprocess.TimeoutExpired:
                     rec.kill()
+        return finished
 
-    await asyncio.to_thread(_record)
-    deps.require(MIC_TEST_WAV.exists() and MIC_TEST_WAV.stat().st_size > 0,
-                 "No se pudo grabar la prueba. ¿La fuente existe y no está en uso?")
+    finished = await asyncio.to_thread(_record)
+    # A real capture is hundreds of KB (48 kHz stereo s16 ≈ 192 KB/s); a header-only/empty WAV
+    # means no audio was captured. Fail with an actionable message instead of returning "ok"
+    # with an unplayable clip (or a raw 500 traceback on the ffmpeg-hung path).
+    ok = finished and MIC_TEST_WAV.exists() and MIC_TEST_WAV.stat().st_size > 2048
+    deps.require(
+        ok,
+        "No se capturó audio de esa fuente. Revisa que el micrófono seleccionado sea el "
+        "correcto y esté activo (si usas el 'Mic Limpio', enciende el filtro de ruido).",
+    )
     return {"ok": True, "seconds": seconds}
 
 

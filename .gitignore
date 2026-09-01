@@ -22,6 +22,12 @@ build/
 # Modelos descargados (Whisper, etc.)
 models/
 
+# App de escritorio (Wails). El binario compilado (build/bin ya lo cubre `build/` arriba) y
+# la copia suelta `desktop/spik-desktop` no se versionan; los bindings de runtime que Wails
+# regenera en cada build tampoco. El icono embebido (desktop/build/appicon.*) se fuerza aparte.
+/desktop/spik-desktop
+/desktop/frontend/wailsjs/
+
 # Frontend (React + Vite). El build (web/dist, frontend/dist) ya lo cubre `dist/` arriba.
 # package-lock.json SÍ se commitea (reproducibilidad del build).
 node_modules/

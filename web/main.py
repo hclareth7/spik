@@ -140,6 +140,22 @@ async def _cache_control(request: Request, call_next):
     return resp
 
 
+def _loopback_host(host: str | None) -> str:
+    """Return a validated loopback bind host, refusing anything network-reachable.
+
+    Privacy invariant ("todo local"): the GUI exposes the camera/mic and must never be
+    reachable from the network, so the bind host is forced to loopback. SPIK_HOST/SPIK_PORT
+    let the desktop shell pick a free localhost port, but a non-loopback host (e.g. 0.0.0.0)
+    is rejected and downgraded to 127.0.0.1 with a warning rather than silently honored.
+    """
+    allowed = {"127.0.0.1", "localhost", "::1"}
+    if host and host in allowed:
+        return host
+    if host:
+        print(f"WARNING: refusing non-loopback SPIK_HOST={host!r}; binding 127.0.0.1 (local only).")
+    return "127.0.0.1"
+
+
 if __name__ == "__main__":
     import shutil
 
@@ -149,4 +165,5 @@ if __name__ == "__main__":
     missing = [t for t in ("ffmpeg", "parec", "pactl", "wpctl", "systemctl") if not shutil.which(t)]
     if missing:
         print(f"WARNING: missing tools: {', '.join(missing)}. Some features will not work.")
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    host = _loopback_host(spik_config.WEB_HOST)
+    uvicorn.run(app, host=host, port=spik_config.WEB_PORT)
