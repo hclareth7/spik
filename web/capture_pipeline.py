@@ -192,9 +192,14 @@ def _preview_output(filter_prefix: str = "", fps: int = 24) -> list[str]:
     vf = "scale=1280:-2:flags=lanczos"
     if filter_prefix:
         vf = f"{filter_prefix},{vf}"
+    # -flush_packets 1: write each JPEG to the pipe the instant it is encoded. Without it
+    # ffmpeg fills its AVIO output buffer (~hundreds of ms of frames) before flushing, which
+    # shows up as ~0.5 s of preview latency. Per-frame flush trades a little syscall overhead
+    # for a live, low-latency stream.
     return ["-map", "0:v",
             "-vf", vf, "-r", str(fps),
-            "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "pipe:1"]
+            "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg",
+            "-flush_packets", "1", "pipe:1"]
 
 
 def _record_output(enc_args: list[str], out_path: str) -> list[str]:
@@ -250,17 +255,22 @@ def build_capture_cmd(
     if SINK_VCAM in sinks and vcam_device is None:
         raise ValueError("the vcam sink requires vcam_device")
 
-    # The virtual-camera path runs alone ({vcam}); only there do we cap input size and apply
-    # low-latency flags, so record/preview keep the full-resolution copy path unchanged.
+    # The virtual-camera path runs alone ({vcam}); only there do we cap the input size, so
+    # record/preview keep the full-resolution copy path unchanged.
     vcam_only = SINK_VCAM in sinks and SINK_RECORD not in sinks
     input_args, enc_args = pick_input_args(
         formats, device, max_width=max_width if vcam_only else None,
     )
 
+    # Low-latency demuxer flags on the live source (reduce buffering, cut decode reorder delay —
+    # harmless for B-frame-less webcam h264). Applied whenever no recording shares the input
+    # (preview-only Checker and vcam-only), so the interactive preview is snappy; the recording
+    # path keeps the untouched copy pipeline so the saved file never drops a frame.
+    low_latency = SINK_RECORD not in sinks
+
     cmd = ["ffmpeg", "-hide_banner", "-loglevel", "error"]
-    if vcam_only:
-        # Reduce demuxer buffering on the live source and cut decode reorder delay (harmless for
-        # B-frame-less webcam h264). These are INPUT flags, so they precede input_args (the -i).
+    if low_latency:
+        # INPUT flags, so they must precede input_args (the -i).
         cmd += ["-fflags", "nobuffer", "-flags", "low_delay"]
     cmd += input_args
     if SINK_RECORD in sinks:
@@ -278,7 +288,8 @@ def build_capture_cmd(
         prefix = build_filter_chain(filters, include_format=False) if SINK_VCAM in sinks else ""
         # During a recording the preview shares the recording ffmpeg; cap it lower to keep the
         # extra decode+encode from starving the shared v4l2 input (which would drop frames on
-        # the recording too). Checker preview (no record sink) keeps the smooth 24 fps.
-        preview_fps = 12 if SINK_RECORD in sinks else 24
+        # the recording too). Checker preview (no record sink) runs at 30 fps so the desktop
+        # snapshot poll gets fresher frames (lower perceived latency).
+        preview_fps = 12 if SINK_RECORD in sinks else 30
         cmd += _preview_output(prefix, preview_fps)
     return cmd

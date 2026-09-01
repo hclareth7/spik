@@ -43,6 +43,13 @@ class CaptureSession:
     """
 
     def __init__(self) -> None:
+        # Serializes start/stop so the reap-then-spawn is atomic. Without it, two concurrent
+        # starts (e.g. the browser opening /video/preview.mjpeg twice) each run their reap
+        # while ``self.proc`` is still None, so neither reaps the other: one ffmpeg is spawned
+        # with no reference kept in the session and leaks, holding the single-open camera
+        # forever (stop() only ever sees the last-spawned proc). The lock guarantees exactly
+        # one owner at a time.
+        self._lock = asyncio.Lock()
         self.proc: asyncio.subprocess.Process | None = None
         self.sinks: set[str] = set()
         self.device: str | None = None
@@ -86,8 +93,30 @@ class CaptureSession:
 
         ``max_width``/``fps`` cap the virtual-camera geometry/framerate for real-time output
         (see :func:`web.capture_pipeline.build_capture_cmd`); they are ignored by other sinks.
+
+        Serialized by ``self._lock`` (with the internal reap) so concurrent starts can never
+        leak an unreferenced ffmpeg that holds the single-open camera.
         """
-        await self.stop()
+        async with self._lock:
+            return await self._start_locked(
+                device=device, sinks=sinks, audio_source=audio_source, out_path=out_path,
+                filters=filters, vcam_device=vcam_device, max_width=max_width, fps=fps,
+            )
+
+    async def _start_locked(
+        self,
+        *,
+        device: str,
+        sinks: set[str],
+        audio_source: str | None = None,
+        out_path: str | None = None,
+        filters: dict | None = None,
+        vcam_device: str | None = None,
+        max_width: int | None = None,
+        fps: int | None = None,
+    ) -> asyncio.subprocess.Process:
+        """Reap-then-spawn body of :meth:`start`; MUST run while holding ``self._lock``."""
+        await self._stop_locked()
         formats = probe_formats(device)
         cmd = build_capture_cmd(
             device=device, sinks=sinks, formats=formats,
@@ -109,15 +138,42 @@ class CaptureSession:
         self.record_path = out_path
         self.filters = filters
         self.log = log
-        # Fan-out preview during recording: a server-owned task drains the MJPEG pipe so a
-        # browser connecting/disconnecting can never fill ffmpeg's stdout buffer and stall
-        # (ruin) the recording. Created synchronously so the pipe is already being drained
-        # during record_start's 2 s liveness window. Only when BOTH sinks are present — a
-        # preview-only session is drained by the browser generator (_mjpeg_stream).
+        # Fan-out preview: a server-owned task drains the MJPEG pipe and publishes the latest
+        # complete JPEG frame. This is the ONLY reader of proc.stdout — every consumer (the
+        # browser multipart stream and the desktop snapshot poll) reads the fan-out buffer,
+        # never the pipe. It guarantees (a) during recording a browser (dis)connect can never
+        # fill ffmpeg's stdout buffer and stall/ruin the recording, and (b) N clients share
+        # one camera open with no reap churn. Runs whenever a preview sink is present, created
+        # synchronously so the pipe is already draining during record_start's 2 s liveness
+        # window and before the first subscriber attaches.
         self._preview_frame = None
-        if SINK_PREVIEW in sinks and SINK_RECORD in sinks:
+        if SINK_PREVIEW in sinks:
             self._drain_task = asyncio.create_task(self._drain_preview(proc))
         return proc
+
+    async def ensure_preview(self, *, device: str) -> None:
+        """Guarantee a preview-only capture is running for ``device`` (idempotent).
+
+        The camera is single-open, so multiple preview clients (the browser multipart stream
+        and every desktop snapshot poll) must share ONE capture. Under ``self._lock`` this
+        starts a preview-only capture only if one is not already running for ``device`` — so
+        concurrent callers can never reap each other (the old double-open black-screen churn).
+
+        No-op when a recording is active (it already tees a drained preview branch) or when a
+        preview for the same device is already running. The drain task started by
+        :meth:`_start_locked` populates ``_preview_frame`` for both stream and snapshot.
+        """
+        async with self._lock:
+            if self.proc is not None and self.proc.returncode is None:
+                if SINK_RECORD in self.sinks or (
+                    SINK_PREVIEW in self.sinks and self.device == device
+                ):
+                    return
+            await self._start_locked(device=device, sinks={SINK_PREVIEW})
+
+    def latest_preview_frame(self) -> bytes | None:
+        """The most recent complete JPEG frame from the fan-out buffer, or None."""
+        return self._preview_frame
 
     async def _drain_preview(self, proc: asyncio.subprocess.Process) -> None:
         """Continuously read the preview MJPEG pipe and publish complete JPEG frames.
@@ -206,7 +262,15 @@ class CaptureSession:
         cleanly; otherwise a plain terminate is enough. The stderr log handle is closed
         but the file is left on disk for the caller to read (recording failure detail);
         the caller is responsible for unlinking it.
+
+        Serialized by ``self._lock`` so a stop can never race a concurrent start (which would
+        otherwise leak the just-spawned ffmpeg and its hold on the camera).
         """
+        async with self._lock:
+            return await self._stop_locked()
+
+    async def _stop_locked(self) -> asyncio.subprocess.Process | None:
+        """Teardown body of :meth:`stop`; MUST run while holding ``self._lock``."""
         proc = self.proc
         log = self.log
         drain = self._drain_task

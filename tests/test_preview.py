@@ -15,11 +15,12 @@ from pathlib import Path
 
 import pytest
 from fastapi import HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi.responses import Response, StreamingResponse
 
 from spik import config
 from web import state
-from web.routers.preview import preview, preview_stop
+from web.routers import preview as preview_mod
+from web.routers.preview import preview, preview_stop, snapshot
 from web.state import _JPEG_EOI, _JPEG_SOI
 
 
@@ -278,3 +279,79 @@ def test_preview_route_uses_fanout_while_recording_without_reopening_camera(monk
     resp = asyncio.run(preview(device="/dev/video4"))
     assert isinstance(resp, StreamingResponse)
     assert started["called"] is False
+
+
+def test_preview_route_starts_shared_preview_when_not_recording(monkeypatch):
+    """Not recording: /video/preview.mjpeg ensures a shared preview capture (idempotent,
+    one camera open) rather than opening the device per client."""
+    monkeypatch.setattr(config, "MODE", "local")
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+
+    called = {"device": None}
+
+    async def _ensure(*, device):
+        called["device"] = device
+
+    monkeypatch.setattr(state.capture, "ensure_preview", _ensure)
+    resp = asyncio.run(preview(device="/dev/video4"))
+    assert isinstance(resp, StreamingResponse)
+    assert called["device"] == "/dev/video4"
+
+
+# ---------------------------------------------------------------------------
+# GET /video/snapshot.jpg (desktop shim polls single JPEG frames)
+# ---------------------------------------------------------------------------
+def test_snapshot_returns_latest_frame(monkeypatch):
+    """Returns the buffered JPEG as image/jpeg with no-store when a frame is available."""
+    monkeypatch.setattr(config, "MODE", "local")
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+
+    ensured = {"called": False}
+
+    async def _ensure(*, device):
+        ensured["called"] = True
+
+    monkeypatch.setattr(state.capture, "ensure_preview", _ensure)
+    state.capture._preview_frame = _jpeg(b"ABC")
+
+    resp = asyncio.run(snapshot(device="/dev/video4"))
+    assert isinstance(resp, Response)
+    assert resp.media_type == "image/jpeg"
+    assert resp.body == _jpeg(b"ABC")
+    assert resp.headers["Cache-Control"] == "no-store"
+    assert ensured["called"] is True
+
+
+def test_snapshot_skips_ensure_preview_while_recording(monkeypatch):
+    """While recording it must serve the recording's fan-out frame WITHOUT starting a
+    preview capture (which would reopen the single-open camera)."""
+    monkeypatch.setattr(config, "MODE", "local")
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    state.capture.proc = _FakeProc()
+    state.capture.sinks = {"record"}  # is_recording() True
+    state.capture._preview_frame = _jpeg(b"REC")
+
+    async def _fail_ensure(*, device):
+        raise AssertionError("ensure_preview must not run during recording")
+
+    monkeypatch.setattr(state.capture, "ensure_preview", _fail_ensure)
+    resp = asyncio.run(snapshot(device="/dev/video4"))
+    assert resp.body == _jpeg(b"REC")
+
+
+def test_snapshot_503_when_no_frame(monkeypatch):
+    """No frame after the short wait → 503 (so the shim can retry) rather than hanging."""
+    monkeypatch.setattr(config, "MODE", "local")
+    monkeypatch.setattr(Path, "exists", lambda self: True)
+    monkeypatch.setattr(preview_mod, "_SNAPSHOT_WAIT_STEPS", 1)
+    monkeypatch.setattr(preview_mod, "_SNAPSHOT_WAIT_STEP_S", 0.0)
+
+    async def _ensure(*, device):
+        pass
+
+    monkeypatch.setattr(state.capture, "ensure_preview", _ensure)
+    state.capture._preview_frame = None
+
+    with pytest.raises(HTTPException) as e:
+        asyncio.run(snapshot(device="/dev/video4"))
+    assert e.value.status_code == 503

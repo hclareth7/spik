@@ -55,8 +55,11 @@ func (a *App) Start() error {
 	)
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	// Own process group so shutdown can signal the whole sidecar tree (uvicorn + children).
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	// Setpgid: own process group so shutdown can signal the whole sidecar tree (uvicorn +
+	// children). Pdeathsig: have the kernel SIGKILL the sidecar if THIS process dies for any
+	// reason (crash, external SIGTERM/SIGKILL) — a safety net beyond the graceful OnShutdown,
+	// so a hard-killed window can never leave an orphaned uvicorn holding the camera/port.
+	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true, Pdeathsig: syscall.SIGKILL}
 	if err := cmd.Start(); err != nil {
 		return fmt.Errorf("could not start the Python sidecar (%s): %w", python, err)
 	}
@@ -72,6 +75,9 @@ func (a *App) Start() error {
 	// FlushInterval=-1 flushes every write immediately so MJPEG (multipart/x-mixed-replace)
 	// camera preview and SSE analysis progress stream to the webview without buffering.
 	proxy.FlushInterval = -1
+	// Inject the MJPEG compatibility shim into the served HTML: WebKitGTK can't render a
+	// multipart <img> stream, so the shim repaints preview frames via fetch() (see mjpeg_shim.go).
+	proxy.ModifyResponse = injectMjpegShim
 	a.proxy = proxy
 
 	return a.waitHealthy(60 * time.Second)
